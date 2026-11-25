@@ -17,6 +17,7 @@ import {
   notifyQuotaExceeded,
   offsetLatLngMeters,
 } from '../utils/geo';
+import { LeafletStreetMap } from './LeafletStreetMap';
 
 interface UberMapStageProps {
   hasApiKey: boolean;
@@ -58,7 +59,6 @@ function VectorTrackingOverlay({
     map.fitBounds(bounds, { top: 96, right: 56, bottom: 280, left: 56 });
   }, [map, pinnedLocation, liveLocation]);
 
-  // Camera orchestration across Stage 1 (Park Here), Stage 2 (Pinned), and Stage 3 (Tracking)
   useEffect(() => {
     if (!map || typeof google === 'undefined') return;
 
@@ -83,13 +83,11 @@ function VectorTrackingOverlay({
     }
   }, [map, isTracking, pinnedLocation, liveLocation, fitBothLocations]);
 
-  // Re-center button tap
   useEffect(() => {
     if (recenterSignal === 0) return;
     fitBothLocations();
   }, [recenterSignal, fitBothLocations]);
 
-  // Real-time Uber-green tracking route ONLY when actively tracking ("Find My Vehicle")
   useEffect(() => {
     if (!map || typeof google === 'undefined') return;
 
@@ -128,7 +126,6 @@ function VectorTrackingOverlay({
       prev &&
       haversineDistanceMeters(prev.origin.lat, prev.origin.lng, liveLocation.lat, liveLocation.lng) < 35;
 
-    // Smoothly update live polyline start point as user moves without extra Routes API requests
     if (sameDest && closeOrigin && routeLinesRef.current.length > 0) {
       const tail = cachedRouteTailRef.current;
       if (tail && tail.length >= 2) {
@@ -285,7 +282,6 @@ function VectorMapCanvas({
           onLiveRouteMetrics={onLiveRouteMetrics}
         />
 
-        {/* Pinned Vehicle Destination Marker (shown once parked) */}
         {pinnedLocation && (
           <AdvancedMarker position={pinnedLocation} title="Parked Vehicle Destination">
             <div className="flex flex-col items-center">
@@ -302,7 +298,6 @@ function VectorMapCanvas({
           </AdvancedMarker>
         )}
 
-        {/* Live User Marker: Pulsing dot before tracking, Real-time Rotating Arrow during Find My Vehicle */}
         <AdvancedMarker position={liveUserLocation} title="Your Live Location">
           {isTracking ? (
             <div className="relative flex items-center justify-center">
@@ -332,7 +327,6 @@ function VectorMapCanvas({
         </AdvancedMarker>
       </GoogleMap>
 
-      {/* Floating Re-center Button when tracking */}
       {isTracking && (
         <button
           type="button"
@@ -358,13 +352,20 @@ export function UberMapStage({
   onLiveRouteMetrics,
 }: UberMapStageProps) {
   const apiStatus = useApiLoadingStatus();
+  const [authFailed, setAuthFailed] = useState<boolean>(false);
 
-  const mapsFailed =
+  useEffect(() => {
+    const onAuthFail = () => setAuthFailed(true);
+    window.addEventListener('gmp-auth-failure', onAuthFail);
+    return () => window.removeEventListener('gmp-auth-failure', onAuthFail);
+  }, []);
+
+  const mapsUnavailable =
     !hasApiKey ||
+    authFailed ||
     apiStatus === APILoadingStatus.FAILED ||
     apiStatus === APILoadingStatus.AUTH_FAILURE;
 
-  // Destination is the exact GPS spot stored when "Park Here" was tapped
   const pinnedLocation: LatLngLiteral | null = useMemo(() => {
     if (!activeSpot) return null;
     if (activeSpot.gps) return { lat: activeSpot.gps.lat, lng: activeSpot.gps.lng };
@@ -389,7 +390,6 @@ export function UberMapStage({
     return pinnedLocation ?? liveUserLocation;
   }, [pinnedLocation, liveUserLocation, isTracking]);
 
-  // Real-time bearing from live moving position straight to the stored destination
   const bearingToDestination = useMemo(() => {
     if (!pinnedLocation) return 0;
     return calculateBearingDegrees(
@@ -400,89 +400,19 @@ export function UberMapStage({
     );
   }, [liveUserLocation, pinnedLocation]);
 
-  if (mapsFailed) {
+  // On Vercel without VITE_GOOGLE_MAPS_API_KEY (or if key is domain-blocked),
+  // render a real interactive Leaflet street map of LPU campus so the map never disappears.
+  if (mapsUnavailable) {
     return (
-      <div className="relative w-full h-full overflow-hidden bg-[#E5F2EA] dark:bg-[#060908] flex items-center justify-center">
-        {/* Clean Vector Road-Grid Fallback Canvas */}
-        <svg
-          className="absolute inset-0 w-full h-full opacity-55 dark:opacity-35"
-          xmlns="http://www.w3.org/2000/svg"
-          aria-hidden="true"
-        >
-          <defs>
-            <pattern id="pf-grid" width="64" height="64" patternUnits="userSpaceOnUse">
-              <path
-                d="M 64 0 L 0 0 0 64"
-                fill="none"
-                stroke={isDark ? 'rgba(6,193,103,0.16)' : 'rgba(5,168,89,0.14)'}
-                strokeWidth="1"
-              />
-            </pattern>
-            <pattern id="pf-major" width="256" height="256" patternUnits="userSpaceOnUse">
-              <rect width="256" height="256" fill="url(#pf-grid)" />
-              <path
-                d="M 0 128 L 256 128 M 128 0 L 128 256"
-                fill="none"
-                stroke={isDark ? 'rgba(6,193,103,0.28)' : 'rgba(5,168,89,0.22)'}
-                strokeWidth="3"
-              />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#pf-major)" />
-        </svg>
-
-        {/* Live Visual Route + Markers Fallback */}
-        {isTracking && pinnedLocation ? (
-          <div className="relative z-10 w-64 h-64 -mt-28 flex items-center justify-center">
-            <svg viewBox="0 0 200 200" className="w-full h-full overflow-visible" aria-hidden="true">
-              <line
-                x1="44"
-                y1="156"
-                x2="156"
-                y2="44"
-                stroke="#06C167"
-                strokeWidth="5"
-                strokeLinecap="round"
-                strokeDasharray="8 8"
-              />
-            </svg>
-            <div className="absolute right-6 top-6 flex flex-col items-center">
-              <div className="mb-1 px-2 py-0.5 rounded-lg bg-white/90 dark:bg-[#0D1410]/90 text-[11px] font-bold text-slate-900 dark:text-white shadow">
-                {etaMinutes} min
-              </div>
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-b from-[#0CE07A] to-[#05A859] border-2 border-white text-white flex items-center justify-center shadow-lg">
-                <Bike className="w-4 h-4" />
-              </div>
-            </div>
-            <div className="absolute left-6 bottom-6 flex items-center justify-center">
-              <span className="absolute w-14 h-14 rounded-full bg-[#06C167]/25 animate-apple-ripple" />
-              <div
-                className="w-10 h-10 rounded-full bg-white dark:bg-[#0D1410] border-2 border-[#06C167] shadow-lg flex items-center justify-center transition-transform duration-300"
-                style={{ transform: `rotate(${bearingToDestination}deg)` }}
-              >
-                <svg viewBox="0 0 24 24" className="w-5 h-5 text-[#06C167]" fill="currentColor">
-                  <path d="M12 2.5L19.5 20.5L12 16.8L4.5 20.5L12 2.5Z" />
-                </svg>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="relative z-10 -mt-28 flex items-center justify-center">
-            {pinnedLocation ? (
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-b from-[#0CE07A] to-[#05A859] border-2 border-white text-white shadow-[0_10px_24px_rgba(6,193,103,0.48)] flex items-center justify-center">
-                <Bike className="w-5 h-5" aria-hidden="true" />
-              </div>
-            ) : (
-              <div className="relative flex items-center justify-center">
-                <span className="absolute w-14 h-14 rounded-full bg-[#06C167]/30 animate-apple-ripple" />
-                <span className="w-7 h-7 rounded-full bg-[#06C167]/25 flex items-center justify-center">
-                  <span className="w-4 h-4 rounded-full bg-[#06C167] border-[2.5px] border-white shadow-lg block" />
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      <LeafletStreetMap
+        isDark={isDark}
+        initialCenter={initialCenter}
+        pinnedLocation={pinnedLocation}
+        liveUserLocation={liveUserLocation}
+        isTracking={isTracking}
+        bearingToDestination={bearingToDestination}
+        etaMinutes={etaMinutes}
+      />
     );
   }
 
