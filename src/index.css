@@ -1,0 +1,89 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    font-family: var(--font-sans);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+}
+
+@keyframes apple-glass-ripple {
+  0% {
+    transform: scale(0.88);
+    opacity: 0.55;
+  }
+  80% {
+    transform: scale(1.48);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.48);
+    opacity: 0;
+  }
+}
+
+@keyframes apple-ambient-breathe {
+  0%,
+  100% {
+    transform: scale(1) translateY(0px);
+    opacity: 0.72;
+  }
+  50% {
+    transform: scale(1.035) translateY(-2px);
+    opacity: 1;
+  }
+}
+
+@keyframes apple-pin-hover {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.animate-apple-ripple {
+  animation: apple-glass-ripple 3.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.animate-apple-ripple-delayed {
+  animation: apple-glass-ripple 3.2s cubic-bezier(0.16, 1, 0.3, 1) 1.6s infinite;
+}
+
+.animate-apple-breathe {
+  animation: apple-ambient-breathe 4.5s ease-in-out infinite;
+}
+
+.animate-apple-pin {
+  animation: apple-pin-hover 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-apple-ripple,
+  .animate-apple-ripple-delayed,
+  .animate-apple-breathe,
+  .animate-apple-pin {
+    animation: none;
+  }
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

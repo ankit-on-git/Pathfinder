@@ -1,0 +1,6 @@
+{
+  "name": "ParkMark",
+  "description": "Mark it. Find it. Fast two-wheeler parking availability finder and spot-saver for crowded campuses, markets, and hospitals.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
