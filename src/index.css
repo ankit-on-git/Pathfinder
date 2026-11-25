@@ -87,16 +87,3 @@
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
-
-.leaflet-container {
-  font-family: var(--font-sans);
-  background: #e5f2ea;
-}
-
-.dark .leaflet-container {
-  background: #060908;
-}
-
-.leaflet-container img {
-  max-width: none !important;
-}

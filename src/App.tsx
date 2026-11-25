@@ -1,4 +1,3 @@
-import { APIProvider } from '@vis.gl/react-google-maps';
 import {
   ArrowLeft,
   ArrowUp,
@@ -43,9 +42,7 @@ import {
   saveVehicleLabel,
 } from './utils/storage';
 
-const MAPS_API_KEY = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined) ?? '';
-
-// Real LPU campus spots used silently behind the scenes for smooth demo
+// Real LPU campus spots used behind the scenes for smooth demo
 const DEMO_PARK_SPOT = LPU_DEMO_LOCATIONS[1]; // LPU Uni Mall Parking (31.2554, 75.7058)
 const DEMO_RETURN_ORIGIN = LPU_DEMO_LOCATIONS[0]; // LPU Main Gate Walkway (31.2536, 75.7037)
 
@@ -63,7 +60,6 @@ export default function App() {
 
   const activeLot = lots.find((l) => l.id === activeLotId) ?? lots[0];
   const bestSection = getBestSection(activeLot);
-  const hasMapsApiKey = Boolean(MAPS_API_KEY && MAPS_API_KEY.trim().length > 0);
 
   // Tracking overlay activates ONLY when user clicks "Find My Vehicle", while map stays mounted in background
   const [isTracking, setIsTracking] = useState<boolean>(false);
@@ -77,17 +73,12 @@ export default function App() {
   );
   const [walkProgress, setWalkProgress] = useState<number>(0);
   const [isSimulatingWalk, setIsSimulatingWalk] = useState<boolean>(false);
-  const [routeMetrics, setRouteMetrics] = useState<{
-    distanceMeters: number;
-    durationSeconds: number;
-  } | null>(null);
 
   const [lockingBusy, setLockingBusy] = useState<boolean>(false);
   const [detailsOpen, setDetailsOpen] = useState<boolean>(false);
   const [guardOpen, setGuardOpen] = useState<boolean>(false);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [toast, setToast] = useState<string | null>(null);
-  const [quotaExceeded, setQuotaExceeded] = useState<boolean>(false);
 
   const isDark = theme === 'dark';
 
@@ -101,13 +92,6 @@ export default function App() {
     }
     saveTheme(theme);
   }, [theme, isDark]);
-
-  // Listen for Google Maps quota errors
-  useEffect(() => {
-    const onQuotaExceeded = () => setQuotaExceeded(true);
-    window.addEventListener('gmp-quota-exceeded', onQuotaExceeded);
-    return () => window.removeEventListener('gmp-quota-exceeded', onQuotaExceeded);
-  }, []);
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -189,7 +173,6 @@ export default function App() {
     if (!activeSpot) return;
     setWalkProgress(0);
     setIsSimulatingWalk(false);
-    setRouteMetrics(null);
     setLiveUserLocation(DEMO_RETURN_ORIGIN.coords);
     setIsTracking(true);
   };
@@ -217,7 +200,6 @@ export default function App() {
     setIsTracking(false);
     setIsSimulatingWalk(false);
     setWalkProgress(0);
-    setRouteMetrics(null);
     setLiveUserLocation(DEMO_PARK_SPOT.coords);
     setToast('Vehicle found');
   };
@@ -317,16 +299,13 @@ export default function App() {
 
   const liveDistanceMeters = useMemo(() => {
     if (!pinnedLoc) return 0;
-    if (routeMetrics && !isSimulatingWalk && walkProgress === 0) {
-      return routeMetrics.distanceMeters;
-    }
     return haversineDistanceMeters(
       liveUserLocation.lat,
       liveUserLocation.lng,
       pinnedLoc.lat,
       pinnedLoc.lng
     );
-  }, [pinnedLoc, routeMetrics, isSimulatingWalk, walkProgress, liveUserLocation]);
+  }, [pinnedLoc, liveUserLocation]);
 
   const liveEtaMinutes = Math.max(1, Math.ceil(liveDistanceMeters / 75));
   const arrived = isTracking && liveDistanceMeters <= 8;
@@ -351,35 +330,17 @@ export default function App() {
     selectedSection.geoOffset.eastMeters
   );
 
-  const appShell = (
-    <div className="relative min-h-[100dvh] w-full overflow-hidden bg-[#EFF7F2] dark:bg-[#060908] text-slate-900 dark:text-slate-50 select-none">
-      {/* Quota Warning Banner (Case A) */}
-      {quotaExceeded && (
-        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2 text-xs text-center fixed top-0 left-0 right-0 z-50">
-          Google Maps Platform quota reached. If you are the app owner, visit{' '}
-          <a
-            href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline font-semibold"
-          >
-            maps developer site
-          </a>{' '}
-          for instructions to update your account.
-        </div>
-      )}
-
-      {/* PERSISTENT BACKGROUND LPU VECTOR MAP */}
+  return (
+    <div className="relative min-h-[100dvh] w-full overflow-hidden bg-[#ECEFF1] dark:bg-[#121A17] text-slate-900 dark:text-slate-50 select-none">
+      {/* PERSISTENT BACKGROUND LPU GOOGLE-MAPS-STYLE CLONE */}
       <div className="fixed inset-0 z-0">
         <UberMapStage
-          hasApiKey={hasMapsApiKey}
           isDark={isDark}
           lot={activeLot}
           activeSpot={activeSpot}
           isTracking={isTracking && Boolean(activeSpot)}
           liveUserLocation={liveUserLocation}
           etaMinutes={liveEtaMinutes}
-          onLiveRouteMetrics={setRouteMetrics}
         />
       </div>
 
@@ -398,7 +359,7 @@ export default function App() {
         />
       )}
 
-      {/* VIEW 3: Active Tracking Overlay over same LPU Vector Map */}
+      {/* VIEW 3: Active Tracking Overlay over LPU Campus Map */}
       <AnimatePresence>
         {isTracking && activeSpot && (
           <motion.div
@@ -600,21 +561,5 @@ export default function App() {
         </div>
       )}
     </div>
-  );
-
-  if (!hasMapsApiKey) {
-    return appShell;
-  }
-
-  return (
-    <APIProvider
-      apiKey={MAPS_API_KEY}
-      version="alpha"
-      libraries={['marker', 'routes']}
-      language="en"
-      region="IN"
-    >
-      {appShell}
-    </APIProvider>
   );
 }
